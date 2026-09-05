@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -8,7 +8,9 @@ import { MapPin, Phone, Mail, Clock } from 'lucide-react';
 import PhoneNumberField from './PhoneNumberField';
 import metaData from "../../metaData.js";
 import { normalizePath } from "../helpers/pathUtils";
-import sendEmail from "../helpers/sendEmail";
+import { createContactEmail, createEmailUrls } from "../helpers/contactEmail";
+import type { EmailData } from "../helpers/contactEmail";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from './ui/dialog';
 import { isValidPhoneNumber } from "react-phone-number-input";
 
 export function ContactPage() {
@@ -21,7 +23,9 @@ export function ContactPage() {
     message: ''
   });
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [isSendingMail, setIsSendingMail] = useState(false);
+  const [emailData, setEmailData] = useState<EmailData | null>(null);
+  const submitButtonRef = useRef<HTMLButtonElement>(null);
+  const emailUrls = emailData ? createEmailUrls(emailData) : null;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -38,9 +42,8 @@ export function ContactPage() {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log(formData);
 
     if (phoneError) {
       toast("❌ Please fix the errors in the form before submitting.");
@@ -69,92 +72,7 @@ export function ContactPage() {
       return;
     }
 
-    setIsSendingMail(true);
-
-    const templateParams = {
-      username: import.meta.env?.VITE_USERNAME ?? "",
-      password: import.meta.env?.VITE_PASSWORD ?? "",
-      templateCode: import.meta.env?.VITE_TEMPLATE_CODE ?? "",
-      to: [
-        import.meta.env?.VITE_SENDER_EMAIL_ONE ?? "",
-        import.meta.env?.VITE_SENDER_EMAIL_TWO ?? "",
-        import.meta.env?.VITE_SENDER_EMAIL ?? ""
-      ].filter(email => email !== ""),
-      placeholders: {
-        from_name: formData.name,
-        to_name: import.meta.env?.VITE_SENDER_NAME ?? "",
-        message: `
-          Name: ${formData.name} <br/>
-          Email: ${formData.email} <br/>
-          ${formData.company ? `Company: ${formData.company} <br/>` : ''}
-          ${formData.phone ? `Phone: ${formData.phone} <br/>` : ''}
-          Subject: ${formData.subject} <br/>
-          Message: <br/>${formData.message}
-        `,
-      },
-    };
-    const replyTemplateParams = {
-      username: import.meta.env?.VITE_USERNAME ?? "",
-      password: import.meta.env?.VITE_PASSWORD ?? "",
-      templateCode: import.meta.env?.VITE_REPLY_TEMPLATE_CODE ?? "",
-      to: [formData?.email ?? ""],
-      placeholders: {
-        to_name: formData?.name ?? "",
-      },
-    };
-
-    let emailSent = false;
-
-    try {
-      const responseOne = await sendEmail(templateParams);
-      console.log(responseOne);
-      if (
-        responseOne?.status === "error" ||
-        responseOne?.data?.status === "failed"
-      ) {
-        emailSent = false;
-        setIsSendingMail(false);
-        toast("❌ Failed to send enquiry. Try again later.");
-      } else {
-        emailSent = true;
-      }
-    } catch (err) {
-      console.error(err);
-      emailSent = false;
-      setIsSendingMail(false);
-      toast("❌ Failed to send enquiry. Try again later.");
-    }
-
-    if (emailSent) {
-      try {
-        const responseTwo = await sendEmail(replyTemplateParams);
-        console.log(responseTwo);
-        if (
-          responseTwo?.status === "error" ||
-          responseTwo?.data?.status === "failed"
-        ) {
-          setIsSendingMail(false);
-          toast("❌ Failed to send enquiry. Try again later.");
-        } else {
-          setIsSendingMail(false);
-          setFormData({
-            name: '',
-            email: '',
-            company: '',
-            phone: '',
-            subject: '',
-            message: ''
-          });
-          toast.success(
-            "Message sent successfully. Thank you for reaching out. We’ll get back to you shortly.",
-          );
-        }
-      } catch (err) {
-        console.error(err);
-        setIsSendingMail(false);
-        toast("❌ Failed to send enquiry. Try again later.");
-      }
-    }
+    setEmailData(createContactEmail(formData));
   };
 
   const offices = [
@@ -171,6 +89,33 @@ export function ContactPage() {
 
   return (
     <div className="min-h-screen py-16 px-4 max-w-7xl mx-auto">
+      <Dialog open={emailData !== null} onOpenChange={(open) => { if (!open) setEmailData(null); }}>
+        <DialogContent className="rounded-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto" onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          submitButtonRef.current?.focus();
+        }}>
+          <Mail aria-hidden="true" className="h-8 w-8 text-accent mx-auto" />
+          <DialogHeader className="sm:text-center">
+            <DialogTitle className="text-primary">Your enquiry is ready</DialogTitle>
+            <DialogDescription>
+              Your email draft is ready. Choose how you want to continue, then review and send it in your email app.
+            </DialogDescription>
+          </DialogHeader>
+          {emailUrls && <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Button type="button" variant="outline" style={{ border: '2px solid #202058' }} className="bg-white text-primary hover:bg-gray-50 hover:text-primary" onClick={() => window.open(emailUrls.gmail, '_blank', 'noopener,noreferrer')}>Open Gmail</Button>
+              <Button type="button" variant="outline" style={{ border: '2px solid #202058' }} className="bg-white text-primary hover:bg-gray-50 hover:text-primary" onClick={() => window.open(emailUrls.outlook, '_blank', 'noopener,noreferrer')}>Open Outlook</Button>
+              <Button type="button" className="bg-[#202058] text-white hover:bg-[#202058]/90" onClick={() => { window.location.href = emailUrls.mailto; }}>Others</Button>
+            </div>
+            <p className="text-sm text-muted-foreground text-center">
+              If a new tab does not open, continue in this tab with{' '}
+              <a className="text-primary underline rounded-sm focus-visible:outline-2 focus-visible:outline-primary" href={emailUrls.gmail}>Gmail</a> or{' '}
+              <a className="text-primary underline rounded-sm focus-visible:outline-2 focus-visible:outline-primary" href={emailUrls.outlook}>Outlook</a>.
+            </p>
+          </>}
+          <DialogClose asChild><Button type="button" variant="ghost">Cancel</Button></DialogClose>
+        </DialogContent>
+      </Dialog>
       {/* Header */}
       {metaTitle ? (
         <h1 className="visually-hidden">
@@ -287,8 +232,8 @@ export function ContactPage() {
                   />
                 </div>
 
-                <Button type="submit" size="lg" disabled={isSendingMail} className="w-full bg-[#202058] hover:bg-[#202058]/90 text-white rounded-lg h-10">
-                  {isSendingMail ? 'Sending...' : 'Send Message'}
+                <Button type="submit" size="lg" ref={submitButtonRef} className="w-full bg-[#202058] hover:bg-[#202058]/90 text-white rounded-lg h-10">
+                  Send Message
                 </Button>
               </form>
             </CardContent>
