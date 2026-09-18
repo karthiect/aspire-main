@@ -201,8 +201,8 @@ function Footer() {
                   © {new Date().getFullYear()} Aspire Grand Excel Automation. All rights reserved.
                 </span>
                 <div className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-sans text-[10px] tracking-wide text-gray-500 sm:text-xs sm:tracking-wider">
+                  <div className="flex items-center gap-2 text-[11px] sm:text-sm">
+                    <span className="font-sans leading-none tracking-wide text-gray-500 sm:tracking-wider">
                       Powered By
                     </span>
                     <a
@@ -214,7 +214,7 @@ function Footer() {
                       <MyImage
                         src={images?.ECSLogo}
                         alt="ECS Logo"
-                        className="h-6 w-auto sm:h-8"
+                        className="h-11 w-auto max-w-[200px] object-contain sm:h-14 sm:max-w-[240px]"
                       />
                     </a>
                   </div>
